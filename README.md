@@ -65,8 +65,8 @@ pytest tests/ -v
 
 | 模型 | 方法 | GSM8K 准确率 |
 |------|------|-----------|
-| Qwen2.5-7B-Instruct | SFT | 72.3% |
-| Qwen2.5-7B-Instruct | SFT + GSPO | 80.1% |
+| Qwen3.5-4B | SFT | |
+| Qwen23.5-4B | SFT + GSPO |  |
 
 *(跑完更新)*
 
