@@ -1,0 +1,86 @@
+# ============================================================
+# SFT (Supervised Fine-Tuning) 训练配置
+# 使用 QLoRA (NF4 量化) + Unsloth 加速
+# 硬件: 4× A5000 (24GB each) — 单卡训练，每卡 ~15GB
+# ============================================================
+
+# --- 模型配置 ---
+model:
+  name: "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"   # 或用 "unsloth/Qwen2.5-14B-Instruct-bnb-4bit"
+  # 若使用 Qwen3.5-9B，可通过路径指定:
+  # name: "/path/to/Qwen3.5-9B-Instruct"
+  max_seq_length: 2048
+  dtype: null                     # 自动检测 (NF4 下自动为 float16)
+  load_in_4bit: true              # NF4 4-bit 量化加载
+
+# --- LoRA 配置 ---
+lora:
+  r: 16                           # LoRA rank
+  lora_alpha: 16                  # LoRA alpha (scaling factor)
+  lora_dropout: 0.0               # Dropout (通常为 0)
+  bias: "none"                    # 不训练 bias
+  use_gradient_checkpointing: "unsloth"  # Unsloth 优化的梯度检查点
+  random_state: 3407              # 随机种子
+  use_rslora: false               # 不使用 rsLoRA
+  loftq_config: null              # 不使用 LoftQ
+  target_modules:                 # 需训练的模块 (Qwen 架构)
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+# --- 数据集配置 ---
+dataset:
+  # Jackrong 蒸馏数据集 (HuggingFace)
+  train:
+    - "R6410418/Chinese-Qwen3-235B-Thinking-2507-Distill-100k"
+    - "R6410418/gpt-oss-120b-distilled-reasoning"
+  # 训练/验证分割比例
+  train_split: 0.95
+  eval_split: 0.05
+  # 数据格式化: 将数据集中的 messages 转为 ChatML 格式
+  chat_template: "chatml"         # <|im_start|>user\n...<|im_end|>\n<|im_start|>assistant\n...<|im_end|>
+  max_samples: null               # null = 使用全部; 设数字限制样本数
+
+# --- 训练超参数 ---
+training:
+  output_dir: "./outputs/sft_qwen_7b_lora"
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 2
+  gradient_accumulation_steps: 4  # 等效 batch_size = 2*4 = 8
+  num_train_epochs: 3
+  learning_rate: 2.0e-4           # LoRA 推荐学习率
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  optim: "adamw_8bit"             # Unsloth 优化的 8-bit AdamW
+  seed: 3407
+  max_grad_norm: 1.0
+
+  # 日志与保存
+  logging_steps: 10
+  save_steps: 500
+  eval_steps: 500
+  save_total_limit: 3
+  save_strategy: "steps"
+  evaluation_strategy: "steps"
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+
+  # 混合精度
+  fp16: true                      # A5000 不支持 bf16, 用 fp16
+  bf16: false
+
+  # 报告
+  report_to: "tensorboard"        # 可选 "wandb"
+  run_name: "sft_qwen_7b_lora_v1"
+
+# --- 硬件配置 ---
+hardware:
+  num_gpus: 1                     # SFT 单卡即可 (每卡 ~15GB VRAM)
+  # 多卡 SFT 可选:
+  # num_gpus: 4
+  # ddp_find_unused_parameters: false

@@ -1,0 +1,104 @@
+# ============================================================
+# GSPO (Group Sampling Policy Optimization) RL 训练配置
+# 基于 TRL GRPOTrainer, 使用 rule-based reward functions
+# 硬件: 4× A5000 (24GB each)
+# ============================================================
+
+# --- 模型配置 ---
+model:
+  # SFT 后的 LoRA adapter 路径 (由 Notebook 2 产生)
+  adapter_path: "./outputs/sft_qwen_7b_lora/final_checkpoint"
+  # 基础模型 (用于合并或作为 reference)
+  base_model: "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"
+  max_completion_length: 1024     # 生成长度上限
+  max_prompt_length: 1536         # prompt 长度上限
+
+# --- GSPO / GRPO 算法配置 ---
+grpo:
+  # GSPO = GRPO + importance_sampling_level="sequence" + loss_type="dr_grpo"
+  num_generations: 8              # 每个 prompt 生成 G 个 response (group size)
+  temperature: 1.0                # 采样温度
+  top_p: 0.95                     # nucleus sampling
+  top_k: 50
+
+  # GSPO 关键参数
+  importance_sampling_level: "sequence"  # token-level → 用 "token"
+  loss_type: "dr_grpo"            # GSPO loss; 可选 "grpo", "bnpo", "dr_grpo"
+  mask_truncated_completions: true       # 丢弃被截断的 completion
+
+  # GRPO 超参数
+  learning_rate: 1.0e-6           # RL 阶段学习率需低于 SFT
+  beta: 0.04                      # KL 散度惩罚系数
+  epsilon: 0.2                    # PPO clipping 系数 (低值)
+  epsilon_high: 0.28              # PPO clipping 上界 (仅 dr_grpo 使用)
+
+  # 训练参数
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 4  # 等效 batch_size = 1*4*4GPU = 16 prompts
+  max_grad_norm: 0.5
+
+  # 优化器
+  optim: "adamw_torch"
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.03
+
+  # 日志
+  logging_steps: 5
+  save_steps: 200
+  save_total_limit: 2
+
+# --- Reward 函数配置 ---
+rewards:
+  # 使用 utils/rewards.py 中的 rule-based 奖励函数
+  functions:
+    - name: "format_reward"
+      weight: 0.2                # 格式奖励权重
+    - name: "anomaly_reward"
+      weight: 0.3                # 异常惩罚权重
+    - name: "correctness_reward"
+      weight: 0.5                # 正确性奖励权重 (最重要)
+
+  # 正确性奖励的参数
+  correctness:
+    extract_pattern: "answer"     # 答案提取模式: "answer", "boxed", "final"
+    match_type: "auto"            # 匹配方式: "numeric", "option", "math", "auto"
+
+# --- 数据集配置 ---
+dataset:
+  # RL 训练数据 (通常 < 2000 条, 高质量 prompt)
+  # 使用 Jackrong 数据集过滤后的数学/推理子集
+  train_file: "./data/rl_train.jsonl"
+  max_samples: 2000
+
+# --- 硬件配置 ---
+hardware:
+  num_gpus: 4                     # 4× A5000
+  # per_device_batch=1, grad_accum=4, 4GPU → 16 prompts/step
+  # 每个 prompt 生成 8 个 response → 128 sequences/step
+  # 显存预估:
+  #   - 基础模型 (NF4): ~5GB
+  #   - 参考模型 (NF4, frozen): ~5GB
+  #   - 8× activations/reward: ~6GB
+  #   - KV cache: ~3GB
+  #   - 总计: ~19GB / 24GB ✅
+
+  fp16: true
+  bf16: false                     # A5000
+
+  # vLLM 加速推理 (可选)
+  use_vllm: false
+  vllm_gpu_memory_utilization: 0.5
+  vllm_device: "auto"
+
+  report_to: "tensorboard"
+  run_name: "gspo_qwen_7b_v1"
+
+# --- GGUF 导出配置 ---
+gguf:
+  # RL 训练后导出 GGUF 量化模型
+  enabled: true
+  quantization_types:
+    - "Q8_0"                      # ~8.5 GB, 几乎无损
+    - "Q4_K_M"                    # ~5.0 GB, 推荐平衡
+  output_dir: "./outputs/gguf"
