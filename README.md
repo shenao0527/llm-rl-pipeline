@@ -58,7 +58,7 @@ pytest tests/ -v
 
 ## 📊 推荐硬件配置
 
-- 训练 Qwen3.5-9B：**4 × RTX A5000 (24GB)** 足够
+- 训练 Qwen3.5-4B：**4 × RTX A5000 (24GB)** 足够
 - 推理 GGUF Q4_K_M：单张 RTX 3090/4090 可运行
 
 ## 📝 实验结果
@@ -66,7 +66,7 @@ pytest tests/ -v
 | 模型 | 方法 | GSM8K 准确率 |
 |------|------|-----------|
 | Qwen3.5-4B | SFT | |
-| Qwen23.5-4B | SFT + GSPO |  |
+| Qwen3.5-4B | SFT + GSPO |  |
 
 *(跑完更新)*
 
