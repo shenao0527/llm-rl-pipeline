@@ -12,7 +12,7 @@ Modular, reproducible LLM RL training pipeline: **Data preparation → SFT (LoRA
 - 🔌 **可插拔奖励函数**：三种开箱即用 rule-based 奖励，支持自定义扩展
 - 📊 **完整链路**：数据获取 → SFT 对齐 → GSPO 强化 → 自动导出 Q4_K_M/Q8_0 GGUF
 - 🧪 **单元测试**：奖励函数和数据校验都有测试
-- 🏋️  **硬件友好**：基于 Unsloth + QLoRA，9B 模型 4×A5000 可训练
+- 🏋️  **硬件友好**：基于 Unsloth + QLoRA，4B 模型 4×A5000 可训练
 
 ## 📋 特性对齐简历
 
